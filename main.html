@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>くすりの日数計算機 (Web版)</title>
+    
+	<meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="日数計算">
+    <link rel="apple-touch-icon" href="icon.png">
+    
+    <style>
+        :root {
+            --primary-color: #3F51B5;
+            --bg-color: #f5f5f6;
+            --surface-color: #ffffff;
+            --text-color: #333333;
+            --border-color: #e0e0e0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 16px;
+            font-size: 20px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .container {
+            padding: 16px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 600px;
+            margin: 0 auto;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .display-card {
+            background-color: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 8px;
+        }
+        .label { font-size: 14px; font-weight: bold; color: #666; }
+        .value { font-size: 28px; font-weight: bold; margin-top: 4px; text-align: right;}
+        .value.left { text-align: left; }
+        
+        input[type="date"] {
+            font-size: 24px;
+            font-weight: bold;
+            border: none;
+            outline: none;
+            font-family: inherit;
+            color: inherit;
+            width: 100%;
+            background: transparent;
+        }
+
+        .keypad {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            flex-grow: 1;
+            margin-top: 8px;
+        }
+        .keypad button {
+            font-size: 24px;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            background-color: var(--surface-color);
+            color: var(--text-color);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+        .keypad button:active { background-color: #e0e0e0; }
+        .keypad button.operator { background-color: #e8eaf6; color: var(--primary-color); }
+        .keypad button.enter { background-color: var(--primary-color); color: white; grid-column: span 1; }
+        .keypad button.zero { grid-column: span 2; }
+        .keypad button.shortcut { font-size: 16px; background-color: var(--primary-color); color: white; opacity: 0.9;}
+
+        /* 遊び心要素：テーマ変更ボタン */
+        .controls { display: flex; gap: 8px; margin-bottom: 16px; }
+        .controls button { padding: 8px 16px; border-radius: 20px; border: 1px solid var(--primary-color); background: transparent; color: var(--primary-color); cursor: pointer; font-weight: bold;}
+    </style>
+</head>
+<body>
+
+    <header>
+        <span>くすりの日数計算機</span>
+        <button id="btn-history" style="background:none; border:none; color:white; font-size:16px; cursor:pointer;">履歴を見る</button>
+    </header>
+
+    <div class="container">
+        <div class="controls">
+            <button onclick="toggleCalendarMode()" id="btn-calendar-mode">西暦 ⇔ 和暦</button>
+            <button onclick="changeTheme()">🎨 テーマ変更</button>
+        </div>
+
+        <div class="display-card">
+            <div class="label">基準日</div>
+            <input type="date" id="input-standard-date">
+        </div>
+
+        <div class="display-card" style="border-color: var(--primary-color); border-width: 2px;">
+            <div class="label">日数</div>
+            <div class="value" id="display-days">0</div>
+        </div>
+
+        <div class="display-card">
+            <div class="label">最終日 <span id="label-final-japanese" style="font-size: 14px; color: #666; font-weight: normal;"></span></div>
+            <div class="value left" id="display-final-date">----/--/--</div>
+        </div>
+
+        <div class="keypad">
+            <button class="shortcut" onclick="inputShortcut(7)">+7</button>
+            <button class="shortcut" onclick="inputShortcut(14)">+14</button>
+            <button class="shortcut" onclick="inputShortcut(21)">+21</button>
+            <button class="shortcut" onclick="inputShortcut(28)">+28</button>
+            
+            <button onclick="inputNumber('7')">7</button>
+            <button onclick="inputNumber('8')">8</button>
+            <button onclick="inputNumber('9')">9</button>
+            <button class="operator" onclick="inputOperator('+')">+</button>
+            
+            <button onclick="inputNumber('4')">4</button>
+            <button onclick="inputNumber('5')">5</button>
+            <button onclick="inputNumber('6')">6</button>
+            <button class="operator" onclick="inputOperator('-')">-</button>
+            
+            <button onclick="inputNumber('1')">1</button>
+            <button onclick="inputNumber('2')">2</button>
+            <button onclick="inputNumber('3')">3</button>
+            <button class="operator" onclick="backspace()">←</button>
+            
+            <button class="operator" onclick="clearAll()">C</button>
+            <button class="zero" onclick="inputNumber('0')">0</button>
+            <button class="enter" onclick="saveHistory()">Ent</button>
+        </div>
+    </div>
+
+    <script>
+        // --- 状態管理 (Riverpodの代わり) ---
+        let state = {
+            standardDate: new Date(),
+            daysExpression: '0',
+            finalDate: new Date(),
+            isJapaneseCalendar: false
+        };
+
+        // --- 初期化 ---
+        document.getElementById('input-standard-date').valueAsDate = state.standardDate;
+        updateDisplay();
+
+        // 基準日が変更された時の処理
+        document.getElementById('input-standard-date').addEventListener('change', function(e) {
+            if(e.target.value) {
+                state.standardDate = new Date(e.target.value);
+                calculateFinalDate();
+            }
+        });
+
+        // --- 計算ロジック (math_expressionsの代わり) ---
+        function inputNumber(num) {
+            if (state.daysExpression === '0') state.daysExpression = num;
+            else state.daysExpression += num;
+            calculateFinalDate();
+        }
+
+        function inputOperator(op) {
+            const lastChar = state.daysExpression.slice(-1);
+            if (lastChar === '+' || lastChar === '-') {
+                state.daysExpression = state.daysExpression.slice(0, -1) + op;
+            } else {
+                state.daysExpression += op;
+            }
+            calculateFinalDate();
+        }
+
+        function inputShortcut(days) {
+            if (state.daysExpression === '0') state.daysExpression = days.toString();
+            else state.daysExpression += '+' + days;
+            calculateFinalDate();
+        }
+
+        function backspace() {
+            if (state.daysExpression.length > 1) {
+                state.daysExpression = state.daysExpression.slice(0, -1);
+            } else {
+                state.daysExpression = '0';
+            }
+            calculateFinalDate();
+        }
+
+        function clearAll() {
+            state.daysExpression = '0';
+            calculateFinalDate();
+        }
+
+        function calculateFinalDate() {
+            try {
+                // 末尾の演算子を無視して計算
+                let expr = state.daysExpression.replace(/[+\-]+$/, '');
+                if (!expr) {
+                    state.finalDate = null;
+                } else {
+                    // 文字列の数式を安全に計算
+                    let days = Function('"use strict";return (' + expr + ')')();
+                    let result = new Date(state.standardDate);
+                    result.setDate(result.getDate() + days);
+                    state.finalDate = result;
+                }
+            } catch (e) {
+                state.finalDate = null;
+            }
+            updateDisplay();
+        }
+
+        // --- UI更新 ---
+        function updateDisplay() {
+            document.getElementById('display-days').innerText = state.daysExpression;
+            
+            const finalDisplay = document.getElementById('display-final-date');
+            const japaneseLabel = document.getElementById('label-final-japanese');
+            
+            if (state.finalDate) {
+                // 西暦表示
+                const yyyy = state.finalDate.getFullYear();
+                const mm = String(state.finalDate.getMonth() + 1).padStart(2, '0');
+                const dd = String(state.finalDate.getDate()).padStart(2, '0');
+                const daysStr = ['日', '月', '火', '水', '木', '金', '土'];
+                const dayOfWeek = daysStr[state.finalDate.getDay()];
+                
+                finalDisplay.innerText = `${yyyy}/${mm}/${dd} (${dayOfWeek})`;
+
+                // 和暦表示 (Intl APIを使用)
+                if(state.isJapaneseCalendar) {
+                    const jpDate = new Intl.DateTimeFormat('ja-JP-u-ca-japanese', { era: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(state.finalDate);
+                    japaneseLabel.innerText = `[ ${jpDate} ]`;
+                } else {
+                    japaneseLabel.innerText = '';
+                }
+            } else {
+                finalDisplay.innerText = '----/--/--';
+                japaneseLabel.innerText = '';
+            }
+        }
+
+        // --- 遊び心機能 ---
+        function toggleCalendarMode() {
+            state.isJapaneseCalendar = !state.isJapaneseCalendar;
+            updateDisplay();
+        }
+
+        function changeTheme() {
+            const colors = ['#3F51B5', '#009688', '#E91E63', '#FF9800', '#607D8B'];
+            const currentColor = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim();
+            let nextIndex = (colors.indexOf(currentColor) + 1) % colors.length;
+            document.documentElement.style.setProperty('--primary-color', colors[nextIndex]);
+        }
+
+        // --- 履歴保存 (Local Storage) ---
+        function saveHistory() {
+            if (!state.finalDate) return;
+            
+            // コメントはとりあえずプロンプトで簡易入力（後でUI化可能）
+            let comment = prompt("コメントを入力（空欄でも可）:", "");
+            if (comment === null) return; // キャンセル時
+
+            const historyItem = {
+                id: Date.now(),
+                standardDate: state.standardDate.toISOString(),
+                daysExpression: state.daysExpression,
+                finalDate: state.finalDate.toISOString(),
+                comment: comment
+            };
+
+            // LocalStorageから取得して追加
+            let history = JSON.parse(localStorage.getItem('calcHistory') || '[]');
+            history.unshift(historyItem); // 先頭に追加
+            
+            // 500件制限
+            if (history.length > 500) history.pop();
+            
+            localStorage.setItem('calcHistory', JSON.stringify(history));
+            alert('履歴に保存しました！');
+            
+            // 連続計算のために次の基準日をセットするなどの処理もここに追加できます
+        }
+
+        // 履歴を見るボタン
+        document.getElementById('btn-history').addEventListener('click', () => {
+            const history = JSON.parse(localStorage.getItem('calcHistory') || '[]');
+            if(history.length === 0) {
+                alert("履歴はありません。");
+                return;
+            }
+            // 簡易的に最新の履歴を表示（本格的な一覧画面は別途作成）
+            let msg = "【最新の履歴5件】\n\n";
+            history.slice(0, 5).forEach(h => {
+                let sDate = new Date(h.standardDate).toLocaleDateString();
+                let fDate = new Date(h.finalDate).toLocaleDateString();
+                msg += `・${h.comment || '無題'}: ${sDate} ＋ ${h.daysExpression}日 ＝ ${fDate}\n`;
+            });
+            alert(msg);
+        });
+
+    </script>
+</body>
+</html>
