@@ -5,11 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>くすりの日数計算機 (Web版)</title>
     
-	<meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="日数計算">
     <link rel="apple-touch-icon" href="icon.png">
-    
+
     <style>
         :root {
             --primary-color: #3F51B5;
@@ -57,7 +57,6 @@
         }
         .label { font-size: 14px; font-weight: bold; color: #666; }
         .value { font-size: 28px; font-weight: bold; margin-top: 4px; text-align: right;}
-        .value.left { text-align: left; }
         
         input[type="date"] {
             font-size: 24px;
@@ -68,6 +67,7 @@
             color: inherit;
             width: 100%;
             background: transparent;
+            margin-top: 4px;
         }
 
         .keypad {
@@ -94,7 +94,6 @@
         .keypad button.zero { grid-column: span 2; }
         .keypad button.shortcut { font-size: 16px; background-color: var(--primary-color); color: white; opacity: 0.9;}
 
-        /* 遊び心要素：テーマ変更ボタン */
         .controls { display: flex; gap: 8px; margin-bottom: 16px; }
         .controls button { padding: 8px 16px; border-radius: 20px; border: 1px solid var(--primary-color); background: transparent; color: var(--primary-color); cursor: pointer; font-weight: bold;}
     </style>
@@ -123,8 +122,8 @@
         </div>
 
         <div class="display-card">
-            <div class="label">最終日 <span id="label-final-japanese" style="font-size: 14px; color: #666; font-weight: normal;"></span></div>
-            <div class="value left" id="display-final-date">----/--/--</div>
+            <div class="label">最終日 <span id="label-final-japanese" style="font-size: 14px; color: var(--primary-color); font-weight: bold;"></span></div>
+            <input type="date" id="input-final-date">
         </div>
 
         <div class="keypad">
@@ -155,7 +154,7 @@
     </div>
 
     <script>
-        // --- 状態管理 (Riverpodの代わり) ---
+        // --- 状態管理 ---
         let state = {
             standardDate: new Date(),
             daysExpression: '0',
@@ -164,18 +163,39 @@
         };
 
         // --- 初期化 ---
-        document.getElementById('input-standard-date').valueAsDate = state.standardDate;
+        // 時刻のズレを防ぐため、ローカル時間の YYYY-MM-DD 文字列を作る関数
+        function getLocalYMD(dateObj) {
+            const yyyy = dateObj.getFullYear();
+            const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const dd = String(dateObj.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
         updateDisplay();
 
-        // 基準日が変更された時の処理
+        // 【機能追加】基準日が変更された時の処理
         document.getElementById('input-standard-date').addEventListener('change', function(e) {
             if(e.target.value) {
                 state.standardDate = new Date(e.target.value);
-                calculateFinalDate();
+                calculateFinalDate(); // 日数は維持して、最終日を再計算
             }
         });
 
-        // --- 計算ロジック (math_expressionsの代わり) ---
+        // 【機能追加】最終日が変更された時の処理（★逆計算ロジック★）
+        document.getElementById('input-final-date').addEventListener('change', function(e) {
+            if(e.target.value) {
+                state.finalDate = new Date(e.target.value);
+                
+                // 最終日 - 基準日 = 日数 (ミリ秒を日数に変換)
+                const diffTime = state.finalDate.getTime() - state.standardDate.getTime();
+                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                
+                state.daysExpression = diffDays.toString();
+                updateDisplay();
+            }
+        });
+
+        // --- 計算ロジック ---
         function inputNumber(num) {
             if (state.daysExpression === '0') state.daysExpression = num;
             else state.daysExpression += num;
@@ -212,14 +232,13 @@
             calculateFinalDate();
         }
 
+        // 順計算（日数から最終日を出す）
         function calculateFinalDate() {
             try {
-                // 末尾の演算子を無視して計算
                 let expr = state.daysExpression.replace(/[+\-]+$/, '');
                 if (!expr) {
                     state.finalDate = null;
                 } else {
-                    // 文字列の数式を安全に計算
                     let days = Function('"use strict";return (' + expr + ')')();
                     let result = new Date(state.standardDate);
                     result.setDate(result.getDate() + days);
@@ -233,30 +252,31 @@
 
         // --- UI更新 ---
         function updateDisplay() {
+            // 基準日をUIに反映
+            document.getElementById('input-standard-date').value = getLocalYMD(state.standardDate);
+            
+            // 日数をUIに反映
             document.getElementById('display-days').innerText = state.daysExpression;
             
-            const finalDisplay = document.getElementById('display-final-date');
+            // 最終日をUIに反映
+            const finalInput = document.getElementById('input-final-date');
             const japaneseLabel = document.getElementById('label-final-japanese');
             
             if (state.finalDate) {
-                // 西暦表示
-                const yyyy = state.finalDate.getFullYear();
-                const mm = String(state.finalDate.getMonth() + 1).padStart(2, '0');
-                const dd = String(state.finalDate.getDate()).padStart(2, '0');
+                finalInput.value = getLocalYMD(state.finalDate);
+
                 const daysStr = ['日', '月', '火', '水', '木', '金', '土'];
                 const dayOfWeek = daysStr[state.finalDate.getDay()];
                 
-                finalDisplay.innerText = `${yyyy}/${mm}/${dd} (${dayOfWeek})`;
-
-                // 和暦表示 (Intl APIを使用)
+                // 和暦と曜日の表示
                 if(state.isJapaneseCalendar) {
                     const jpDate = new Intl.DateTimeFormat('ja-JP-u-ca-japanese', { era: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(state.finalDate);
-                    japaneseLabel.innerText = `[ ${jpDate} ]`;
+                    japaneseLabel.innerText = `(${dayOfWeek}) [ ${jpDate} ]`;
                 } else {
-                    japaneseLabel.innerText = '';
+                    japaneseLabel.innerText = `(${dayOfWeek})`;
                 }
             } else {
-                finalDisplay.innerText = '----/--/--';
+                finalInput.value = '';
                 japaneseLabel.innerText = '';
             }
         }
@@ -274,13 +294,12 @@
             document.documentElement.style.setProperty('--primary-color', colors[nextIndex]);
         }
 
-        // --- 履歴保存 (Local Storage) ---
+        // --- 履歴保存 ---
         function saveHistory() {
             if (!state.finalDate) return;
             
-            // コメントはとりあえずプロンプトで簡易入力（後でUI化可能）
             let comment = prompt("コメントを入力（空欄でも可）:", "");
-            if (comment === null) return; // キャンセル時
+            if (comment === null) return; 
 
             const historyItem = {
                 id: Date.now(),
@@ -290,27 +309,21 @@
                 comment: comment
             };
 
-            // LocalStorageから取得して追加
             let history = JSON.parse(localStorage.getItem('calcHistory') || '[]');
-            history.unshift(historyItem); // 先頭に追加
-            
-            // 500件制限
+            history.unshift(historyItem);
             if (history.length > 500) history.pop();
             
             localStorage.setItem('calcHistory', JSON.stringify(history));
             alert('履歴に保存しました！');
-            
-            // 連続計算のために次の基準日をセットするなどの処理もここに追加できます
         }
 
-        // 履歴を見るボタン
+        // 履歴を見る
         document.getElementById('btn-history').addEventListener('click', () => {
             const history = JSON.parse(localStorage.getItem('calcHistory') || '[]');
             if(history.length === 0) {
                 alert("履歴はありません。");
                 return;
             }
-            // 簡易的に最新の履歴を表示（本格的な一覧画面は別途作成）
             let msg = "【最新の履歴5件】\n\n";
             history.slice(0, 5).forEach(h => {
                 let sDate = new Date(h.standardDate).toLocaleDateString();
